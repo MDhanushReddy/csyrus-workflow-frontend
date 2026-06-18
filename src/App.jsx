@@ -47,6 +47,7 @@ export default function App() {
     title: "",
     description: "",
     priority: "MEDIUM",
+    reviewer_id: "",
   })
   const [reviewForm, setReviewForm] = useState({
     action: "APPROVED",
@@ -57,6 +58,7 @@ export default function App() {
     title: "",
     description: "",
     priority: "MEDIUM",
+    reviewer_id: "",
   })
 
   const stats = useMemo(() => {
@@ -90,6 +92,17 @@ export default function App() {
   )
   const rejectedRequests = useMemo(
     () => requests.filter((r) => r.status === "REJECTED"),
+    [requests],
+  )
+  const reviewers = useMemo(
+    () => users.filter((candidate) => (candidate.role || "").toLowerCase() === "reviewer"),
+    [users],
+  )
+  const recentActivity = useMemo(
+    () =>
+      [...requests]
+        .sort((a, b) => new Date(b.updated_at || b.created_at) - new Date(a.updated_at || a.created_at))
+        .slice(0, 4),
     [requests],
   )
 
@@ -153,11 +166,12 @@ export default function App() {
           title: form.title,
           description: form.description,
           priority: form.priority,
+          reviewer_id: form.reviewer_id ? Number(form.reviewer_id) : null,
           created_by: user.id,
         }),
       })
 
-      setForm({ title: "", description: "", priority: "MEDIUM" })
+      setForm({ title: "", description: "", priority: "MEDIUM", reviewer_id: "" })
       await loadData()
     } catch (error) {
       console.error(error)
@@ -205,6 +219,7 @@ export default function App() {
   const handleViewRequest = (requestId) => {
     setSelectedRequestId(String(requestId))
     setReviewMessage("")
+    setEditingRequestId(null)
   }
 
   const startEditing = (request) => {
@@ -213,6 +228,7 @@ export default function App() {
       title: request.title,
       description: request.description,
       priority: request.priority,
+      reviewer_id: request.reviewer_id ? String(request.reviewer_id) : "",
     })
   }
 
@@ -227,6 +243,7 @@ export default function App() {
           title: editForm.title,
           description: editForm.description,
           priority: editForm.priority,
+          reviewer_id: editForm.reviewer_id ? Number(editForm.reviewer_id) : null,
           created_by: user.id,
         }),
       })
@@ -464,51 +481,89 @@ export default function App() {
           </>
         ) : (
           <>
-            <section style={{ ...panelStyle, marginBottom: 24, background: "linear-gradient(90deg, #f8fafc 0%, #f5f3ff 100%)" }}>
-              <div style={{ display: "grid", gridTemplateColumns: "1.3fr 0.7fr", gap: 16 }}>
+            <section style={{ ...panelStyle, marginBottom: 24, background: "linear-gradient(90deg, #f8fafc 0%, #f5f3ff 100%)", border: "1px solid #e9ddff" }}>
+              <div style={{ display: "grid", gridTemplateColumns: "1.2fr 0.8fr", gap: 18 }}>
                 <div>
-                  <p style={{ margin: 0, color: "#2563eb", fontSize: 13, fontWeight: 700 }}>Requester</p>
-                  <h2 style={{ margin: "6px 0 0" }}>{user.name}</h2>
-                  <p style={{ color: "#64748b", marginBottom: 0 }}>{user.email}</p>
+                  <p style={{ margin: 0, color: "#6d28d9", fontSize: 12, fontWeight: 800, textTransform: "uppercase", letterSpacing: 1.4 }}>Requester dashboard</p>
+                  <h2 style={{ margin: "8px 0 0", fontSize: 30, fontWeight: 800 }}>{user.name}</h2>
+                  <p style={{ color: "#64748b", margin: "6px 0 0" }}>{user.email}</p>
                 </div>
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 10 }}>
-                  <div style={statCardStyle}><strong>{stats.total}</strong><span>Total</span></div>
-                  <div style={statCardStyle}><strong>{stats.pending}</strong><span>Pending</span></div>
-                  <div style={statCardStyle}><strong>{stats.approved}</strong><span>Approved</span></div>
-                  <div style={statCardStyle}><strong>{stats.rejected}</strong><span>Rejected</span></div>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: 10 }}>
+                  <div style={{ ...statCardStyle, background: "#f8fafc", borderColor: "#e2e8f0" }}><strong>{stats.total}</strong><span>Total</span></div>
+                  <div style={{ ...statCardStyle, background: "#fff7ed", borderColor: "#fed7aa" }}><strong>{stats.pending}</strong><span>Pending</span></div>
+                  <div style={{ ...statCardStyle, background: "#ecfdf3", borderColor: "#a7f3d0" }}><strong>{stats.approved}</strong><span>Approved</span></div>
+                  <div style={{ ...statCardStyle, background: "#fef2f2", borderColor: "#fecaca" }}><strong>{stats.rejected}</strong><span>Rejected</span></div>
                 </div>
               </div>
             </section>
 
-            <section style={{ display: "grid", gridTemplateColumns: "0.95fr 1.15fr", gap: 24 }}>
-              <div style={panelStyle}>
-                <h3 style={{ marginTop: 0 }}>Create request</h3>
-                <form onSubmit={handleRequestSubmit} style={{ display: "grid", gap: 12 }}>
-                  <input style={inputStyle} placeholder="Request title" value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} />
-                  <textarea style={{ ...inputStyle, minHeight: 120 }} placeholder="Request description" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} />
-                  <select style={inputStyle} value={form.priority} onChange={(e) => setForm({ ...form, priority: e.target.value })}>
-                    <option value="LOW">Low</option>
-                    <option value="MEDIUM">Medium</option>
-                    <option value="HIGH">High</option>
-                  </select>
-                  <button style={buttonStyle} type="submit">Create request</button>
-                </form>
+            <section style={{ display: "grid", gridTemplateColumns: "0.9fr 1.1fr", gap: 24 }}>
+              <div style={{ display: "grid", gap: 24 }}>
+                <div style={{ ...panelStyle, background: "linear-gradient(180deg, #fff 0%, #f8fbff 100%)" }}>
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
+                    <h3 style={{ margin: 0 }}>Create request</h3>
+                    <span style={{ ...statPillStyle, background: "#eef2ff", color: "#4338ca" }}>New</span>
+                  </div>
+                  <form onSubmit={handleRequestSubmit} style={{ display: "grid", gap: 12, marginTop: 16 }}>
+                    <input style={inputStyle} placeholder="Request title" value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} />
+                    <textarea style={{ ...inputStyle, minHeight: 120 }} placeholder="Request description" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} />
+                    <select style={inputStyle} value={form.priority} onChange={(e) => setForm({ ...form, priority: e.target.value })}>
+                      <option value="LOW">Low</option>
+                      <option value="MEDIUM">Medium</option>
+                      <option value="HIGH">High</option>
+                    </select>
+                    <select style={inputStyle} value={form.reviewer_id} onChange={(e) => setForm({ ...form, reviewer_id: e.target.value })}>
+                      <option value="">Assign reviewer (optional)</option>
+                      {reviewers.map((reviewer) => (
+                        <option key={reviewer.id} value={reviewer.id}>{reviewer.name} ({reviewer.email})</option>
+                      ))}
+                    </select>
+                    <button style={buttonStyle} type="submit">Create request</button>
+                  </form>
+                </div>
+
+                <div style={{ ...panelStyle, background: "linear-gradient(180deg, #fff 0%, #f9fafb 100%)" }}>
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
+                    <h3 style={{ margin: 0 }}>Recent activity</h3>
+                    <span style={{ ...statPillStyle, background: "#ecfdf3", color: "#16a34a" }}>Live</span>
+                  </div>
+                  <div style={{ display: "grid", gap: 10, marginTop: 16 }}>
+                    {recentActivity.map((request) => (
+                      <div key={request.id} style={{ border: "1px solid #eef2ff", borderRadius: 14, padding: 12, background: "#f8fafc" }}>
+                        <div style={{ display: "flex", justifyContent: "space-between", gap: 10 }}>
+                          <strong style={{ fontSize: 14 }}>{request.title}</strong>
+                          <span style={{ ...statusBadgeStyle, ...STATUS_STYLES[request.status] }}>{request.status}</span>
+                        </div>
+                        <p style={{ margin: "6px 0 0", color: "#64748b", fontSize: 13 }}>{formatDate(request.updated_at || request.created_at)}</p>
+                      </div>
+                    ))}
+                    {recentActivity.length === 0 && <p style={{ margin: 0, color: "#64748b" }}>No activity yet.</p>}
+                  </div>
+                </div>
               </div>
 
-              <div style={panelStyle}>
-                <h3 style={{ marginTop: 0 }}>My requests</h3>
-                <div style={{ display: "grid", gap: 14 }}>
+              <div style={{ ...panelStyle, background: "linear-gradient(180deg, #fff 0%, #f8fafc 100%)" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
+                  <div>
+                    <p style={{ margin: 0, color: "#2563eb", fontSize: 12, fontWeight: 800, textTransform: "uppercase", letterSpacing: 1.3 }}>Request management</p>
+                    <h3 style={{ margin: "6px 0 0" }}>My requests</h3>
+                  </div>
+                  <span style={{ ...statPillStyle, background: "#eef2ff", color: "#4338ca" }}>{requests.length} total</span>
+                </div>
+                <div style={{ display: "grid", gap: 14, marginTop: 16 }}>
                   {requests.map((request) => (
                     <div key={request.id} style={{ border: "1px solid #e2e8f0", borderRadius: 14, padding: 16, background: "#fff" }}>
                       <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "flex-start" }}>
                         <div style={{ flex: 1 }}>
-                          <h3 style={{ margin: 0 }}>{request.title}</h3>
+                          <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+                            <h3 style={{ margin: 0 }}>{request.title}</h3>
+                            <span style={{ ...statusBadgeStyle, ...STATUS_STYLES[request.status] }}>{request.status}</span>
+                          </div>
                           <p style={{ margin: "10px 0", color: "#475569" }}>{request.description}</p>
                           <div style={{ color: "#64748b", fontSize: 13 }}>
-                            Reviewer: {request.reviewer_id ?? "None"} | Priority: {request.priority}
+                            Reviewer: {reviewers.find((r) => r.id === request.reviewer_id)?.name || request.reviewer_id || "None"} | Priority: {request.priority}
                           </div>
                         </div>
-                        <span style={{ ...statusBadgeStyle, ...STATUS_STYLES[request.status] }}>{request.status}</span>
                       </div>
 
                       {editingRequestId === request.id ? (
@@ -520,6 +575,12 @@ export default function App() {
                             <option value="MEDIUM">Medium</option>
                             <option value="HIGH">High</option>
                           </select>
+                          <select style={inputStyle} value={editForm.reviewer_id} onChange={(e) => setEditForm({ ...editForm, reviewer_id: e.target.value })}>
+                            <option value="">Assign reviewer (optional)</option>
+                            {reviewers.map((reviewer) => (
+                              <option key={reviewer.id} value={reviewer.id}>{reviewer.name} ({reviewer.email})</option>
+                            ))}
+                          </select>
                           <div style={{ display: "flex", gap: 8 }}>
                             <button style={buttonStyle} type="submit">Save</button>
                             <button style={secondaryButtonStyle} type="button" onClick={() => setEditingRequestId(null)}>Cancel</button>
@@ -529,11 +590,31 @@ export default function App() {
                         <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
                           <button style={buttonStyle} onClick={() => startEditing(request)}>Edit</button>
                           <button style={deleteButtonStyle} onClick={() => handleDeleteRequest(request.id)}>Delete</button>
+                          <button style={secondaryButtonStyle} onClick={() => handleViewRequest(request.id)}>View details</button>
                         </div>
                       )}
                     </div>
                   ))}
                 </div>
+
+                {selectedRequest && (
+                  <div style={{ marginTop: 18, border: "1px solid #e2e8f0", borderRadius: 18, padding: 18, background: "linear-gradient(180deg, #f8fafc 0%, #f5f3ff 100%)" }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "flex-start" }}>
+                      <div>
+                        <p style={{ margin: 0, color: "#6d28d9", fontSize: 12, fontWeight: 800, textTransform: "uppercase", letterSpacing: 1.3 }}>Request details</p>
+                        <h3 style={{ margin: "6px 0 0", fontSize: 22, fontWeight: 800 }}>{selectedRequest.title}</h3>
+                      </div>
+                      <span style={{ ...statusBadgeStyle, ...STATUS_STYLES[selectedRequest.status] }}>{selectedRequest.status}</span>
+                    </div>
+                    <p style={{ color: "#475569", lineHeight: 1.7, marginTop: 12 }}>{selectedRequest.description}</p>
+                    <div style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: 10, marginTop: 16 }}>
+                      <div style={{ ...statCardStyle, background: "#fff" }}><strong>{selectedRequest.priority}</strong><span>Priority</span></div>
+                      <div style={{ ...statCardStyle, background: "#fff" }}><strong>{reviewers.find((r) => r.id === selectedRequest.reviewer_id)?.name || selectedRequest.reviewer_id || "None"}</strong><span>Reviewer</span></div>
+                      <div style={{ ...statCardStyle, background: "#fff" }}><strong>{formatDate(selectedRequest.created_at)}</strong><span>Created</span></div>
+                      <div style={{ ...statCardStyle, background: "#fff" }}><strong>{formatDate(selectedRequest.updated_at)}</strong><span>Updated</span></div>
+                    </div>
+                  </div>
+                )}
               </div>
             </section>
           </>
